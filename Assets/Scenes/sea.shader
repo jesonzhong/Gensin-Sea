@@ -27,6 +27,7 @@
 			{
 				float4 vertex : POSITION;
 				float2 uv : TEXCOORD0;
+				float3 normal : NORMAL;
 			};
 
 			struct v2f
@@ -34,7 +35,10 @@
 				float2 uv : TEXCOORD0;
 				UNITY_FOG_COORDS(1)
 				float4 vertex : SV_POSITION;
+
+				float3 worldNormal : TEXCOORD1;
 				float4 projPos : TEXCOORD2;
+				float3 worldPos : TEXCOORD3;
 			};
 
 			sampler2D _MainTex;
@@ -51,6 +55,8 @@
 				UNITY_TRANSFER_FOG(o,o.vertex);
 				
 				o.projPos = ComputeScreenPos(o.vertex);
+				o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
+				o.worldNormal = UnityObjectToWorldNormal(v.normal); 
 				COMPUTE_EYEDEPTH(o.projPos.z);
 				return o;
 			}
@@ -77,13 +83,9 @@
 				// sample the texture
 				fixed4 col = tex2D(_MainTex, i.uv);
 
-				// ↓これなにやってるのかわかってない
     			float sceneZ = LinearEyeDepth(SAMPLE_DEPTH_TEXTURE_PROJ(_CameraDepthTexture, UNITY_PROJ_COORD(i.projPos)));
 				float po = SAMPLE_DEPTH_TEXTURE_PROJ(_CameraDepthTexture, UNITY_PROJ_COORD(i.projPos));
 
-				//_CameraDepthTexture ... depth ← リニアでない
-				//線形でないとは？
-				//線形じゃないんですか？
 
 				float partZ = i.projPos.z;
 
@@ -101,9 +103,15 @@
 				fixed4 cos_grad = cosine_gradient(1-volmeZ, phases, amplitudes, frequencies, offsets);
   				cos_grad = clamp(cos_grad, 0., 1.);
 				
-				float alpha = clamp(volmeZ * 5,0,1);
+  				col.rgb = toRGB(cos_grad);
+					
+				half3 worldViewDir = normalize(_WorldSpaceCameraPos - i.worldPos);
+                half3 reflDir = reflect(-worldViewDir, i.worldNormal);
+				fixed4 reflectionColor = UNITY_SAMPLE_TEXCUBE_LOD(unity_SpecCube0, reflDir, 0);
+				col = lerp(col , reflectionColor , 0.5);
 
-  				col= fixed4(toRGB(cos_grad), alpha);
+				float alpha = clamp(volmeZ/1.0f ,0,1);
+  				col.a = alpha;
 				return col;
 			}
 			ENDCG
