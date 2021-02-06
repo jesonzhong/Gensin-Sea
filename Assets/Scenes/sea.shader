@@ -76,6 +76,37 @@
 			fixed3 toRGB(fixed3 grad){
   				 return grad.rgb;
 			}
+			float3x3 rotX (float a){
+				float3x3 mat = float3x3(
+					float3(1 , 0 , 0),
+					float3(0 , cos(a) , -sin(a)),
+					float3(0 , sin(a) , cos(a))
+				);
+				return mat;
+			}
+			float3x3 rotY (float a){
+				float3x3 mat = float3x3(
+					float3(cos(a) ,0 ,sin(a)),
+					float3(0 , 1 , 0),
+					float3(-sin(a) , 0 , cos(a))
+				);
+				return mat;
+			}
+			float3x3 rotZ (float a){
+				float3x3 mat = float3x3(
+					float3(cos(a) ,-sin(a) , 0),
+					float3(sin(a) , cos(a) , 0),
+					float3(0 , 0 , 1)
+				);
+				return mat;
+			}
+			float3 randomRot(float3 normal , float3 pos){
+				float angleZ =  sin(pos.z/1.0  )*0.01;
+				//float angleX =  sin(pos.x/10.0 + _Time[1])*0.1;
+				normal = mul(rotZ(angleZ) , normal);
+				//normal = mul(rotX(angleX) , normal);
+				return normal;
+			}
 
 			UNITY_DECLARE_DEPTH_TEXTURE(_CameraDepthTexture);	
 			fixed4 frag (v2f i) : SV_Target
@@ -102,15 +133,28 @@
 
 				fixed4 cos_grad = cosine_gradient(1-volmeZ, phases, amplitudes, frequencies, offsets);
   				cos_grad = clamp(cos_grad, 0., 1.);
-				
+
   				col.rgb = toRGB(cos_grad);
 					
+				// 波にゆらぎを与える
+				i.worldNormal = randomRot(i.worldNormal , i.worldPos);
+				// relfection color
 				half3 worldViewDir = normalize(_WorldSpaceCameraPos - i.worldPos);
                 half3 reflDir = reflect(-worldViewDir, i.worldNormal);
 				fixed4 reflectionColor = UNITY_SAMPLE_TEXCUBE_LOD(unity_SpecCube0, reflDir, 0);
-				col = lerp(col , reflectionColor , 0.5);
 
-				float alpha = clamp(volmeZ/1.0f ,0,1);
+				// fresnel reflect 
+				float f0 = 0.02;
+
+    			float vReflect = f0 + (1-f0) * pow(
+					(1 - dot(worldViewDir,i.worldNormal)),
+				5);
+				vReflect = saturate(vReflect * 1.4);
+
+				col = lerp(col , reflectionColor , vReflect);
+
+				col = reflectionColor; 
+				float alpha = saturate(volmeZ/1.0f);
   				col.a = alpha;
 				return col;
 			}
