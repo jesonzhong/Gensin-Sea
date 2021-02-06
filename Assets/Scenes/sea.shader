@@ -149,11 +149,10 @@
     			float vReflect = f0 + (1-f0) * pow(
 					(1 - dot(worldViewDir,i.worldNormal)),
 				5);
-				vReflect = saturate(vReflect * 1.4);
+				vReflect = saturate(vReflect * 2.0);
 
 				col = lerp(col , reflectionColor , vReflect);
 
-				col = reflectionColor; 
 				float alpha = saturate(volmeZ/1.0f);
   				col.a = alpha;
 				return col;
