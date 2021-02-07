@@ -76,55 +76,29 @@
 			fixed3 toRGB(fixed3 grad){
   				 return grad.rgb;
 			}
-			float3x3 rotX (float a){
-				float3x3 mat = float3x3(
-					float3(1 , 0 , 0),
-					float3(0 , cos(a) , -sin(a)),
-					float3(0 , sin(a) , cos(a))
-				);
-				return mat;
+			float2 rand(float2 st, int seed)
+			{
+				float2 s = float2(dot(st, float2(127.1, 311.7)) + seed, dot(st, float2(269.5, 183.3)) + seed);
+				return -1 + 2 * frac(sin(s) * 43758.5453123);
 			}
-			float3x3 rotY (float a){
-				float3x3 mat = float3x3(
-					float3(cos(a) ,0 ,sin(a)),
-					float3(0 , 1 , 0),
-					float3(-sin(a) , 0 , cos(a))
-				);
-				return mat;
-			}
-			float3x3 rotZ (float a){
-				float3x3 mat = float3x3(
-					float3(cos(a) ,-sin(a) , 0),
-					float3(sin(a) , cos(a) , 0),
-					float3(0 , 0 , 1)
-				);
-				return mat;
-			}
-			fixed2 random2(fixed2 st){
-            	st = fixed2( dot(st,fixed2(127.1,311.7)),
-                           dot(st,fixed2(269.5,183.3)) );
-            	return -1.0 + 2.0*frac(sin(st)*43758.5453123);
-        	}
-
-        	float perlinNoise(fixed2 st) 
-        	{
-				st = st*0.2;
+			float noise(float2 st, int seed)
+			{
 				st.y += _Time[1];
-        	    fixed2 p = floor(st);
-            	fixed2 f = frac(st);
-            	fixed2 u = f*f*(3.0-2.0*f);
 
-            	float v00 = random2(p+fixed2(0,0));
-            	float v10 = random2(p+fixed2(1,0));
-            	float v01 = random2(p+fixed2(0,1));
-            	float v11 = random2(p+fixed2(1,1));
-
-            	return lerp( lerp( dot( v00, f - fixed2(0,0) ), dot( v10, f - fixed2(1,0) ), u.x ),
-                    lerp( dot( v01, f - fixed2(0,1) ), dot( v11, f - fixed2(1,1) ), u.x ), 
-                    u.y)+0.5f;
-        	}
-			float3 randomRot(float3 normal , float3 pos){
-				float height = perlinNoise(pos.xz)*0.1;
+				float2 p = floor(st);
+				float2 f = frac(st);
+ 
+				float w00 = dot(rand(p, seed), f);
+				float w10 = dot(rand(p + float2(1, 0), seed), f - float2(1, 0));
+				float w01 = dot(rand(p + float2(0, 1), seed), f - float2(0, 1));
+				float w11 = dot(rand(p + float2(1, 1), seed), f - float2(1, 1));
+				
+				float2 u = f * f * (3 - 2 * f);
+ 
+				return lerp(lerp(w00, w10, u.x), lerp(w01, w11, u.x), u.y);
+			}
+			float3 swell(float3 normal , float3 pos){
+				float height = noise(pos.xz * 0.2,0)*0.3;
 				normal = normalize(
 					cross ( 
 						float3(0,ddy(height),1),
@@ -141,9 +115,6 @@
 				fixed4 col = tex2D(_MainTex, i.uv);
 
     			float sceneZ = LinearEyeDepth(SAMPLE_DEPTH_TEXTURE_PROJ(_CameraDepthTexture, UNITY_PROJ_COORD(i.projPos)));
-				float po = SAMPLE_DEPTH_TEXTURE_PROJ(_CameraDepthTexture, UNITY_PROJ_COORD(i.projPos));
-
-
 				float partZ = i.projPos.z;
 
 				float volmeZ = clamp(
@@ -163,17 +134,19 @@
   				col.rgb = toRGB(cos_grad);
 					
 				// 波にゆらぎを与える
-				i.worldNormal = randomRot(i.worldNormal , i.worldPos);
-				// relfection color
 				half3 worldViewDir = normalize(_WorldSpaceCameraPos - i.worldPos);
-                half3 reflDir = reflect(-worldViewDir, i.worldNormal);
+				float3 swelledNormal = swell(i.worldNormal , i.worldPos);
+				float anisotropy = dot(worldViewDir,i.worldNormal);
+				float a = pow(anisotropy , 1.0f);
+				swelledNormal = lerp(i.worldNormal ,swelledNormal, a);
+				// relfection color
+                half3 reflDir = reflect(-worldViewDir, swelledNormal);
 				fixed4 reflectionColor = UNITY_SAMPLE_TEXCUBE_LOD(unity_SpecCube0, reflDir, 0);
 
 				// fresnel reflect 
 				float f0 = 0.02;
-
     			float vReflect = f0 + (1-f0) * pow(
-					(1 - dot(worldViewDir,i.worldNormal)),
+					(1 - dot(worldViewDir,swelledNormal)),
 				5);
 				vReflect = saturate(vReflect * 2.0);
 
