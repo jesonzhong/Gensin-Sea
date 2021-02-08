@@ -2,8 +2,7 @@
 {
 	Properties
 	{
-    	_sharowBlue("sharrowBlue", Color) = (.34, .85, .92, 1) // カラー
-	    _deepBlue("deepBlue", Color) = (.34, .85, .92, 1) // カラー
+    	_lightPos("lightPos", Vector) = (0 , 1, 0, 0)
 
 		_MainTex ("Texture", 2D) = "white" {}
 	}
@@ -43,9 +42,7 @@
 
 			sampler2D _MainTex;
 			float4 _MainTex_ST;
-			
-			uniform float4 _sharowBlue;
-			uniform float4 _deepBlue;
+			uniform float4 _lightPos;	
 
 			v2f vert (appdata v)
 			{
@@ -98,7 +95,7 @@
 				return lerp(lerp(w00, w10, u.x), lerp(w01, w11, u.x), u.y);
 			}
 			float3 swell(float3 normal , float3 pos){
-				float height = noise(pos.xz * 0.2,0)*0.3;
+				float height = noise(pos.xz * 0.1,0)*1.0;
 				normal = normalize(
 					cross ( 
 						float3(0,ddy(height),1),
@@ -136,12 +133,19 @@
 				// 波にゆらぎを与える
 				half3 worldViewDir = normalize(_WorldSpaceCameraPos - i.worldPos);
 				float3 swelledNormal = swell(i.worldNormal , i.worldPos);
+
+				//エイリアシング防止の為、入射角が水平に近い場合法線を揺らさないようにする
 				float anisotropy = dot(worldViewDir,i.worldNormal);
-				float a = pow(anisotropy , 1.0f);
+				float a = pow(anisotropy , 1.4f);
 				swelledNormal = lerp(i.worldNormal ,swelledNormal, a);
+
 				// relfection color
                 half3 reflDir = reflect(-worldViewDir, swelledNormal);
 				fixed4 reflectionColor = UNITY_SAMPLE_TEXCUBE_LOD(unity_SpecCube0, reflDir, 0);
+				// speclar
+				float spe = pow( saturate(dot( reflDir, normalize(_lightPos.xyz))),100);
+				float3 lightColor = float3(1,1,1);
+				//reflectionColor += 0.4 * half4((spe * lightColor).xxxx);
 
 				// fresnel reflect 
 				float f0 = 0.02;
@@ -150,9 +154,11 @@
 				5);
 				vReflect = saturate(vReflect * 2.0);
 
+
 				col = lerp(col , reflectionColor , vReflect);
 
-				float alpha = saturate(volmeZ/1.0f);
+
+				float alpha = saturate(volmeZ*2.0f);
   				col.a = alpha;
 				return col;
 			}
