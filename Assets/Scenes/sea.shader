@@ -94,8 +94,9 @@
  
 				return lerp(lerp(w00, w10, u.x), lerp(w01, w11, u.x), u.y);
 			}
-			float3 swell(float3 normal , float3 pos){
-				float height = noise(pos.xz * 0.1,0)*1.0;
+			float3 swell(float3 normal , float3 pos , float anisotropy){
+				float height = noise(pos.xz * 0.1,0);
+				height *= anisotropy ;
 				normal = normalize(
 					cross ( 
 						float3(0,ddy(height),1),
@@ -113,12 +114,7 @@
 
     			float sceneZ = LinearEyeDepth(SAMPLE_DEPTH_TEXTURE_PROJ(_CameraDepthTexture, UNITY_PROJ_COORD(i.projPos)));
 				float partZ = i.projPos.z;
-
-				float volmeZ = clamp(
-					(sceneZ - partZ)/10.0f,
-					0,
-					1
-				);
+				float volmeZ = saturate( (sceneZ - partZ)/10.0f);
 
 				const fixed4 phases = fixed4(0.28, 0.50, 0.07, 0.);
 				const fixed4 amplitudes = fixed4(4.02, 0.34, 0.65, 0.);
@@ -127,25 +123,24 @@
 
 				fixed4 cos_grad = cosine_gradient(1-volmeZ, phases, amplitudes, frequencies, offsets);
   				cos_grad = clamp(cos_grad, 0., 1.);
-
   				col.rgb = toRGB(cos_grad);
 					
 				// 波にゆらぎを与える
 				half3 worldViewDir = normalize(_WorldSpaceCameraPos - i.worldPos);
-				float3 swelledNormal = swell(i.worldNormal , i.worldPos);
 
-				//エイリアシング防止の為、入射角が水平に近い場合法線を揺らさないようにする
-				float anisotropy = dot(worldViewDir,i.worldNormal);
-				float a = pow(anisotropy , 1.4f);
-				swelledNormal = lerp(i.worldNormal ,swelledNormal, a);
+				//エイリアシング防止
+				float3 v = i.worldPos - _WorldSpaceCameraPos;
+				float anisotropy = saturate(1/(ddy(length ( v.xz )))/5);
+				float3 swelledNormal = swell(i.worldNormal , i.worldPos , anisotropy);
 
 				// relfection color
                 half3 reflDir = reflect(-worldViewDir, swelledNormal);
 				fixed4 reflectionColor = UNITY_SAMPLE_TEXCUBE_LOD(unity_SpecCube0, reflDir, 0);
-				// speclar
+				/* speclar
 				float spe = pow( saturate(dot( reflDir, normalize(_lightPos.xyz))),100);
 				float3 lightColor = float3(1,1,1);
-				//reflectionColor += 0.4 * half4((spe * lightColor).xxxx);
+				reflectionColor += 0.4 * half4((spe * lightColor).xxxx);
+				*/
 
 				// fresnel reflect 
 				float f0 = 0.02;
@@ -154,12 +149,12 @@
 				5);
 				vReflect = saturate(vReflect * 2.0);
 
-
 				col = lerp(col , reflectionColor , vReflect);
 
-
 				float alpha = saturate(volmeZ*2.0f);
+				
   				col.a = alpha;
+
 				return col;
 			}
 			ENDCG
