@@ -151,7 +151,7 @@
 
 				col = lerp(col , reflectionColor , vReflect);
 
-				float alpha = saturate(volmeZ*2.0f);
+				float alpha = saturate(volmeZ);
 				
   				col.a = alpha;
 
